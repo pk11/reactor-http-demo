@@ -5,10 +5,10 @@ import com.github.pk11.rnio.HttpServer.{ HTTPRequest, HTTPResponse }
 import concurrent.{ Future, ExecutionContext }
 import java.util.concurrent.Executor
 import java.nio.channels._
-import reactor.fn._
-import reactor.core.Promise
-import reactor.core.{ Reactor, Promises }
-import reactor.R
+import reactor.function._
+import reactor.event.Event
+import reactor.core.Reactor
+import reactor.core.composable.Promises
 import concurrent.ExecutionContext.Implicits.global
 
 // ~~ helpers
@@ -28,7 +28,11 @@ class ReactorExecutionContext(r: Reactor) extends ExecutionContext with Executor
   def execute(runnable: Runnable): Unit = {
     import SAM.fn2Consumer
     val handler: (Event[Runnable]) => Unit = (ev) => ev.getData.run()
-    Promises.defer[Event[Runnable]].using(r).get().consume(handler).accept(Event.wrap(runnable))
+    Promises.success(Event.wrap(runnable))
+      .reactor(r)
+      .get()
+      .consume(handler)
+      .resolve()
   }
 
   /**
@@ -79,11 +83,11 @@ class HttpServer(port: Int) extends rnio.HttpServer(port) {
                 }
               }
               //this is non-blocking
-              Promises.defer[Event[SocketChannel]]
-                .using(reactor)
+              Promises.success(Event.wrap(channel))
+                .reactor(reactor)
                 .get()
-                .set(Event.wrap(channel))
                 .consume(handler)
+                .resolve()
               /*
               reactor.on(Functions.$("failure"), { (ev: Event[Throwable]) => ev.getData.printStackTrace() })
               val context = new ReactorExecutionContext(reactor)
