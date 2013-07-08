@@ -1,5 +1,11 @@
 package com.github.pk11.rnio;
 
+import reactor.R;
+import reactor.core.Environment;
+import reactor.core.Reactor;
+import reactor.event.Event;
+import reactor.function.Consumer;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -20,60 +26,58 @@ import java.util.Set;
 import java.util.Collections;
 import java.util.StringTokenizer;
 import java.util.Arrays;
-import static reactor.Fn.$;
-import reactor.fn.*;
-import reactor.core.*;
-import reactor.R;
 import java.net.StandardSocketOptions;
+
+import static reactor.function.Functions.$;
 
 public class HttpServer implements Runnable {
 
-    protected final Selector selector = openSelector();
-    protected final ServerSocketChannel server = openChannel();
+	protected final Selector            selector = openSelector();
+	protected final ServerSocketChannel server   = openChannel();
 
 
-    public final Reactor reactor = R.reactor()
-                                   .using(new Environment())
-                                   .dispatcher(Environment.RING_BUFFER)
-                                   .get();
+	public final Reactor reactor = R.reactor()
+																	.env(new Environment())
+																	.dispatcher(Environment.RING_BUFFER)
+																	.get();
 
 
-    public HttpServer handler (final Handler rhandler) {
-        reactor.on($("channelhandler"), new Consumer<Event<SocketChannel>>() {
-            public void accept(Event<SocketChannel> ev) {
-                try {
-                    SocketChannel channel = ev.getData();
-                    if (channel.isOpen()) {
-                        HTTPRequest request = new HTTPRequest(read(toBuffer(channel)));
-                        rhandler.handle(request, new HTTPResponse(channel));
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    sneakyThrow(e);
-                }
+	public HttpServer handler(final Handler rhandler) {
+		reactor.on($("channelhandler"), new Consumer<Event<SocketChannel>>() {
+			public void accept(Event<SocketChannel> ev) {
+				try {
+					SocketChannel channel = ev.getData();
+					if (channel.isOpen()) {
+						HTTPRequest request = new HTTPRequest(read(toBuffer(channel)));
+						rhandler.handle(request, new HTTPResponse(channel));
+					}
+				} catch (Exception e) {
+					e.printStackTrace();
+					sneakyThrow(e);
+				}
 
-            }
-        });
+			}
+		});
 
-        return this;
-    }
+		return this;
+	}
 
-    public HttpServer(int port) {
-        try {
-            server.socket().bind(new InetSocketAddress(port));
-            server.configureBlocking(false);
-            server.register(selector, SelectionKey.OP_ACCEPT);
-        } catch (IOException ex) {
-            sneakyThrow(ex);
-        }
-    }
+	public HttpServer(int port) {
+		try {
+			server.socket().bind(new InetSocketAddress(port));
+			server.configureBlocking(false);
+			server.register(selector, SelectionKey.OP_ACCEPT);
+		} catch (IOException ex) {
+			sneakyThrow(ex);
+		}
+	}
 
-    public void run() {
-        while (true) {
-            try {
-                int cnt = selector.select();
-                if (cnt > 0) {
-                    Iterator<SelectionKey> i = selector.selectedKeys().iterator();
+	public void run() {
+		while (true) {
+			try {
+				int cnt = selector.select();
+				if (cnt > 0) {
+					Iterator<SelectionKey> i = selector.selectedKeys().iterator();
                     while (i.hasNext()) {
                         SelectionKey key = i.next();
                         i.remove();
